@@ -36,7 +36,7 @@
 ## 已知事项
 
 1. **exe 体积**：Qt 版约 50 MB（原 WebView2 版约 20 MB），含 PySide6 运行时，属正常水平
-2. **`C:\Users\admin\AiLock\` 目录**：测试期间因 Bash 环境无 `APPDATA`，探针/测试进程的日志与配置回退写到了这里（内容均为测试数据，非真实配置）。确认无用后可手动删除
+2. **`C:\Users\<用户名>\AiLock\` 目录**：测试期间因 Bash 环境无 `APPDATA`，探针/测试进程的日志与配置回退写到了这里（内容均为测试数据，非真实配置）。确认无用后可手动删除
 3. **冻结 exe 仅内置 Qt 界面**：`AILOCK_UI=web/tk` 仅对源码运行有效（spec 已排除旧模块）
 4. **热键组合冲突**：本机 `Ctrl+Shift+K` 已被其他程序占用（1409），换组合即可
 
@@ -269,7 +269,7 @@ smoke_qt_lock / smoke_qt_settings(12) / smoke_qt_unlock(18) / test_lock_layout_f
 - Bing 生态每天本质上只有 1~2 张新图（官方与第三方镜像同源），这是图源天性；
   第三方源 peapix 实测与 zh-CN 内容基本重合（仅一天偏移），未引入
 - 沙箱环境注意：WorkBuddy 的 bash 无 APPDATA 且有代理白名单，测试需显式
-  `APPDATA='C:/Users/admin/AppData/Roaming'`；曾误写 `C:/Users/admin/AiLock/`
+  `APPDATA='C:/Users/<用户名>/AppData/Roaming'`；曾误写 `C:/Users/<用户名>/AiLock/`
   （app_dir 的 home 回退），属测试产物待清理
 
 # 追加：按图去重 + idx 翻页（重复图修复）

@@ -269,3 +269,9 @@ lockscreen/
 ```
 
 配置、日志、状态文件全部在 `%APPDATA%\AiLock\`，删掉它就彻底重置。
+
+---
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源。

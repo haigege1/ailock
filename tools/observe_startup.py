@@ -7,8 +7,9 @@ from pathlib import Path
 import win32gui
 import win32process
 
-EXE = r"C:\Users\admin\WorkBuddy\2026-09-02-11-49-44\lockscreen\dist\AiLock.exe"
-OUT = Path(r"C:\Users\admin\AppData\Local\Temp\ailock_obs.txt")
+HERE = Path(__file__).resolve().parent.parent
+EXE = str(HERE / "dist" / "AiLock.exe")
+OUT = Path(__file__).resolve().parent / "_verify_out" / "observe_startup.txt"
 out = []
 
 
@@ -53,4 +54,6 @@ for i in range(15):
         rec(">>> 进程全部消失！")
         break
 
+OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text("\n".join(out), encoding="utf-8")
+print(f"已写入 {OUT}")

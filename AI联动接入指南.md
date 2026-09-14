@@ -57,8 +57,8 @@ ZCode 的 Hook 有三个来源，但**项目级当前不执行** —— 写在 `
 
 | 文件 | 作用 |
 |---|---|
-| `C:\Users\admin\.zcode\hooks\ailock-notify.mjs` | 桥接脚本：解析事件 → 原子写 status.json |
-| `C:\Users\admin\.zcode\cli\config.json` | 注册了 5 个事件（原 plugins / mcp 配置已保留） |
+| `%USERPROFILE%\.zcode\hooks\ailock-notify.mjs` | 桥接脚本：解析事件 → 原子写 status.json |
+| `%USERPROFILE%\.zcode\cli\config.json` | 注册了 5 个事件（原 plugins / mcp 配置已保留） |
 | `...config.json.bak.20260903-151441` | 改之前的备份 |
 
 ### 为什么不调 AiLock.exe
@@ -234,7 +234,7 @@ C:\Tools\AiLock\AiLock.exe --notify --sid demo-b --state done
 
 ```cmd
 mkdir C:\Tools\AiLock
-copy "C:\Users\admin\WorkBuddy\2026-09-02-11-49-44\lockscreen\dist\AiLock.exe" C:\Tools\AiLock\
+copy "<项目目录>\dist\AiLock.exe" C:\Tools\AiLock\
 ```
 
 > 必须放固定位置，因为 hook / alias 里要写绝对路径。
@@ -300,7 +300,7 @@ doskey codex-lock=C:\Tools\AiLock\AiLock.exe --run -t "Codex 长任务" -- codex
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/env node \"C:\\Users\\admin\\.tokentracker\\bin\\notify.cjs\" --source=claude"
+            "command": "/usr/bin/env node \"C:\\Users\\<用户名>\\.tokentracker\\bin\\notify.cjs\" --source=claude"
           }
         ]
       },
