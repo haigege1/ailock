@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AiLock</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- 浏览器预览切换条（App 模式下不显示） -->
+<div id="previewBar">
+  <div class="brand"><span class="logo">A</span>AiLock · 界面预览</div>
+  <div class="tabs">
+    <button class="tab active" data-view="lock">锁屏</button>
+    <button class="tab" data-view="settings">设置</button>
+  </div>
+</div>
+
+<!-- ============ 锁屏视图 ============ -->
+<div id="lock">
+  <div class="bg" id="bg"></div>
+  <div class="veil"></div>
+
+  <button class="nav-arrow left" id="arrowL">‹</button>
+  <button class="nav-arrow right" id="arrowR">›</button>
+
+  <div class="lock-inner">
+    <div class="clock" id="clock">00:00</div>
+    <div class="date" id="date"></div>
+    <div class="msg" id="msg"></div>
+
+    <div class="card" id="card">
+      <div class="avatar">A</div>
+      <div class="card-title">输入密码以解锁</div>
+      <div class="pw-row">
+        <input class="pw-input" id="pw" type="password" placeholder="密码" autocomplete="off" />
+        <button class="unlock-btn" id="unlock">解锁</button>
+      </div>
+      <div class="err-msg" id="errMsg">密码错误，请重试</div>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="item" id="statusItem">
+      <span class="dot" id="statusDot"></span><span id="statusTask">空闲</span>
+    </div>
+    <span class="sep"></span>
+    <div class="item"><span class="dot"></span>防休眠已开启</div>
+    <span class="sep"></span>
+    <div class="item" id="statusLock" style="display:none;">最短锁定 <span id="statusLockVal">00:00</span></div>
+    <span class="kbd">← / → 切换壁纸 · Ctrl+Alt+L 锁屏</span>
+  </div>
+
+  <div class="pending" id="pending">
+    <div class="pa-title" id="paTitle">任务完成</div>
+    <div class="pa-count" id="paCount">90 秒</div>
+    <div class="pa-hint">输入密码可取消，倒计时结束后执行</div>
+  </div>
+
+  <div class="toast" id="toast">壁纸 1 / 4</div>
+
+  <div class="unlocked" id="unlocked">
+    <div style="font-size:40px;">✓</div>
+    <div style="font-size:16px;">已解锁</div>
+  </div>
+</div>
+
+<!-- ============ 设置视图 ============ -->
+<div id="settings">
+  <button class="win-close" id="winClose" title="关闭">✕</button>
+  <div class="set-nav">
+    <div class="grp">系统</div>
+    <button class="nav-item active" data-sec="general"><span class="ico">⚙</span>常规</button>
+    <button class="nav-item" data-sec="security"><span class="ico">🔒</span>安全</button>
+    <button class="nav-item" data-sec="appearance"><span class="ico">🎨</span>壁纸</button>
+    <div class="grp">联动</div>
+    <button class="nav-item" data-sec="ai"><span class="ico">🤖</span>AI 联动</button>
+  </div>
+
+  <div class="set-body">
+    <!-- 常规 -->
+    <section class="panel active" data-sec="general">
+      <h1>常规</h1>
+      <div class="sub">锁屏行为与电源策略</div>
+      <div class="card-block">
+        <div class="row">
+          <div class="meta"><div class="t">开机自启后自动锁定</div><div class="d">电脑启动时立即进入锁屏</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="swStartLock"><span class="track"></span></label></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">空闲自动上锁</div><div class="d">无操作达到时长后自动锁屏</div></div>
+          <div class="ctl">
+            <select id="selIdle">
+              <option value="off">关闭</option>
+              <option value="5">5 分钟</option>
+              <option value="10">10 分钟</option>
+              <option value="30">30 分钟</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">最短锁定时长</div><div class="d">防止手贱立刻解开，倒计时内禁止解锁</div></div>
+          <div class="ctl">
+            <select id="selMinLock">
+              <option value="off">无限制</option>
+              <option value="1">1 分钟</option>
+              <option value="2">2 分钟</option>
+              <option value="5">5 分钟</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">屏幕常亮（阻止休眠）</div><div class="d">锁屏期间系统不会进入睡眠</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="swKeepOn"><span class="track"></span></label></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">锁屏提示语</div><div class="d">显示在时钟下方的文字</div></div>
+          <div class="ctl"><input type="text" id="txtMsg" placeholder="例如：AI 正在跑，请勿关机" style="width:220px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 安全 -->
+    <section class="panel" data-sec="security">
+      <h1>安全</h1>
+      <div class="sub">口令与防爆破策略</div>
+      <div class="card-block">
+        <div class="row" style="display:block;">
+          <div class="meta" style="margin-bottom:12px;"><div class="t">修改锁屏密码</div><div class="d">旧密码 · 新密码 · 确认新密码</div></div>
+          <div class="pw-card">
+            <div class="field"><label>旧密码</label><input type="password" id="pwOld" autocomplete="off"></div>
+            <div class="field"><label>新密码（至少 4 位）</label><input type="password" id="pwNew" autocomplete="off"></div>
+            <div class="field"><label>确认新密码</label><input type="password" id="pwCfm" autocomplete="off"></div>
+            <div class="pw-foot">
+              <button class="btn-primary" id="pwSave">保存密码</button>
+              <span class="pw-feedback" id="pwFeedback"></span>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">连续错误锁定</div><div class="d">输错达到次数后锁定一段时间</div></div>
+          <div class="ctl"><span id="secPolicy" style="font-size:13px;color:var(--c-ink-2);">5 次 / 30 秒</span></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">错误反馈动画</div><div class="d">密码错误时卡片摇晃 + 红边（关闭则瞬时提示）</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="swAnim"><span class="track"></span></label></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 壁纸 -->
+    <section class="panel" data-sec="appearance">
+      <h1>壁纸</h1>
+      <div class="sub">背景、动效与视觉风格</div>
+      <div class="card-block">
+        <div class="row">
+          <div class="meta"><div class="t">壁纸模式</div><div class="d">纯色 / 单张图片 / 文件夹轮播</div></div>
+          <div class="ctl">
+            <div class="seg" id="segMode">
+              <button data-val="color">纯色</button>
+              <button data-val="image">单图</button>
+              <button data-val="folder">文件夹</button>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">暗化遮罩</div><div class="d">提升锁屏文字可读性（0–80%）</div></div>
+          <div class="ctl"><input type="range" id="slDim" min="0" max="80" value="45"><span class="slider-val" id="slDimVal">45%</span></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">背景模糊</div><div class="d">高斯模糊半径（0–20px）</div></div>
+          <div class="ctl"><input type="range" id="slBlur" min="0" max="20" value="0"><span class="slider-val" id="slBlurVal">0 px</span></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">壁纸缓移动效（Ken Burns）</div><div class="d">背景图缓慢平移，让静态壁纸“活”起来</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="swKen"><span class="track"></span></label></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI 联动 -->
+    <section class="panel" data-sec="ai">
+      <h1>AI 联动</h1>
+      <div class="sub">任务跑完自动执行电源动作</div>
+      <div class="card-block">
+        <div class="row">
+          <div class="meta"><div class="t">状态检测</div><div class="d">监控状态文件，识别任务完成/失败</div></div>
+          <div class="ctl"><label class="switch"><input type="checkbox" id="swStatus"><span class="track"></span></label></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">任务完成动作</div><div class="d">监测到 done 后执行</div></div>
+          <div class="ctl">
+            <select id="selAction">
+              <option value="none">不执行</option>
+              <option value="shutdown">自动关机</option>
+              <option value="hibernate">自动休眠</option>
+              <option value="sleep">自动睡眠</option>
+              <option value="unlock">自动解锁</option>
+              <option value="notify">仅提示</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">动作前倒计时</div><div class="d">可一键取消的缓冲时间（秒）</div></div>
+          <div class="ctl"><input type="text" id="txtCountdown" value="90" style="width:80px;"><span style="font-size:13px;color:var(--c-ink-3);">秒</span></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">状态文件路径</div><div class="d">默认 %APPDATA%\AiLock\status.json</div></div>
+          <div class="ctl"><input type="text" id="txtStatusPath" style="width:260px;"></div>
+        </div>
+        <div class="row">
+          <div class="meta"><div class="t">轮询间隔</div><div class="d">检查状态文件的频率（秒）</div></div>
+          <div class="ctl"><input type="text" id="txtPoll" value="2" style="width:80px;"><span style="font-size:13px;color:var(--c-ink-3);">秒</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
