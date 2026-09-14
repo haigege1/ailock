@@ -1,0 +1,26 @@
+# 统一行尾策略，避免 Windows/Linux 协作时全文件 diff
+* text=auto
+
+# .bat 必须是 CRLF，否则部分环境下 cmd 解析异常
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 源码与文档统一 LF
+*.py   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.js   text eol=lf
+
+# 二进制，禁止任何转换
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.exe binary
+*.dll binary
+*.zip binary
