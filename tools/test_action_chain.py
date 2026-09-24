@@ -16,6 +16,11 @@
           同一个 done 状态重复写入不应反复触发；
           但 done → running → done 的「重启任务」应能再次触发
 
+隔离说明：状态文件写在临时目录（配置里的 status.path + notify 的 -f），
+          不碰真机 %APPDATA%/AiLock/status.json，也避开 status.d 里正在
+          跑的会话 —— 否则「存在仍在运行的其他会话」会把 done 动作合法地
+          抑制掉，测试就假红了（2026-09-24 遇到）。
+
 安全约束：阶段 2 的倒计时设为 15 秒，测试在触发后 4 秒内就 kill 掉进程，
           永远不会真的关机。
 """
@@ -24,6 +29,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -32,7 +38,9 @@ EXE = HERE / "dist" / "AiLock.exe"
 APPDATA_DIR = Path.home() / "AppData" / "Roaming" / "AiLock"
 LOG = APPDATA_DIR / "ailock.log"
 CONFIG = APPDATA_DIR / "config.json"
-STATUS = APPDATA_DIR / "status.json"
+# 临时状态目录：本测试的 status.json 落在这里，真机状态不受影响
+TMP_DIR = Path(tempfile.mkdtemp(prefix="ailock-chain-"))
+STATUS = TMP_DIR / "status.json"
 
 PASS, FAIL = 0, 0
 
@@ -126,7 +134,7 @@ def restore(bak):
 
 def notify(*args) -> subprocess.CompletedProcess:
     """通过 exe 自带的上报入口写状态文件（走真实用户路径）。"""
-    return subprocess.run([str(EXE), "--notify", *args],
+    return subprocess.run([str(EXE), "--notify", *args, "-f", str(STATUS)],
                           capture_output=True, text=True,
                           encoding="utf-8", errors="replace")
 
@@ -147,7 +155,8 @@ def wait_for(needle: str, mark: int, timeout: float = 12.0) -> bool:
 def run_phase(title: str, cfg_patch: dict, script):
     print(f"\n{'=' * 52}\n{title}\n{'=' * 52}")
     kill_all()
-    write_config(cfg_patch)
+    # 监控路径指向临时目录：status.d 里现有会话不再干扰本测试
+    write_config({**cfg_patch, "path": str(STATUS)})
     try:
         STATUS.unlink()
     except FileNotFoundError:
@@ -276,6 +285,7 @@ def main() -> int:
     finally:
         kill_all()
         restore(bak)
+        shutil.rmtree(TMP_DIR, ignore_errors=True)
 
     print(f"\n{'=' * 52}\n通过 {PASS} 项，失败 {FAIL} 项\n{'=' * 52}")
     return 0 if FAIL == 0 else 1

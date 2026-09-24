@@ -14,6 +14,10 @@ WorkBuddy 桌面版的 hooks 与 Claude Code 同构：事件发生时向本进�
    - 所以 Stop 时先保持 running，另起一个后台确认进程，等
      DONE_DELAY_SECONDS 秒后再检查：期间没有新事件才写 done
    - 设环境变量 AILOCK_DONE_DELAY=0 可关掉窗口（Stop 立即写 done）
+   - 同时写下 turn_end_at 兜底：宿主的 Job Object 会在钩子退出时连带杀掉
+     那个后台子进程（2026-09-24 实机确认：文件全停在 running，日志里
+     status.done 一条都没落），此时由 AiLock 读取侧按同一窗口补记 done。
+     所以这个子进程只是「快路径」，真正确保收尾的是 AiLock 进程本身。
 3. 跳过 subagent 触发的事件（session_id / transcript_path 含 "subagent"）
 
 与 ZCode 版的差异：不解析 transcript（WorkBuddy 事件 payload 直接带
@@ -290,6 +294,9 @@ def handle_event(input_data):
             data["step"] = step
             data["progress"] = (min(0.9, step / (step + 6)) if step > 0 else None)
             data["source"] = "workbuddy"
+            # turn_end_at 是给 AiLock 读取侧看的兜底标记（见下方说明）：
+            # 下一轮事件会重建 data（不带这个键），标记自然失效
+            data["turn_end_at"] = data["updated"]
             data["lines"] = build_lines(data["lines"], ai_reply, None,
                                         "✓ 本轮结束，等待确认…")
             write_json_atomic(st, data)

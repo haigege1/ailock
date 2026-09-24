@@ -400,6 +400,10 @@ def handle_event(input_data):
             data["step"] = step
             data["progress"] = (min(0.9, step / (step + 6)) if step > 0 else None)
             data["source"] = "zcode"
+            # turn_end_at 兜底：宿主的 Job Object 会在钩子退出时连带杀掉那个
+            # 后台确认子进程，光靠它文件会永远停在 running。AiLock 读取侧
+            # 见到本字段且过了确认窗口就补记 done。
+            data["turn_end_at"] = data["updated"]
             data["lines"] = build_lines(data["lines"], ai_reply, None,
                                         "✓ 本轮结束，等待确认…")
             write_json_atomic(st, data)

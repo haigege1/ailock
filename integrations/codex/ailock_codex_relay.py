@@ -201,6 +201,10 @@ def handle_event(payload):
             data["step"] = step
             data["progress"] = min(0.9, step / (step + 6))
             data["source"] = "codex"
+            # turn_end_at 兜底：宿主收进程树时后台确认进程会被连坐杀掉，
+            # 光靠它文件会永远停在 running。AiLock 读取侧见到本字段且过了
+            # 确认窗口就补记 done。
+            data["turn_end_at"] = data["updated"]
             data["lines"] = ([l for l in data["lines"]
                               if isinstance(l, str) and l.startswith("你:")]
                              + ["AI: " + clip(ai_reply, 60)]

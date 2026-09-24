@@ -6,7 +6,8 @@
 1. 一会话一卡：N 个会话 → N 张卡，纵向排列互不重叠
 2. 超过 MAX_CARDS 的会话截断
 3. 排序：在跑的优先，其次按 updated 倒序（最新在前）
-4. 收尾超过 TTL（10 分钟）的会话不再显示；在跑的会话不受 TTL 限制
+4. 撤卡规则：收尾超 10 分钟 / running 停更超 30 分钟都不再显示；
+   Stop 卡在 running 的按「已完成」渲染（读取侧 settle 兜底）
 5. 底部状态栏：单会话显示任务名，多会话显示「X 等 N 个会话」
 6. 卡片不与壁纸切换箭头、居中密码卡重叠
 7. normalize_sessions / pick_primary 的边界（None / dict / list / 脏数据）
@@ -24,7 +25,8 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 app = QApplication(sys.argv)
 
 from core.config import Config  # noqa: E402
-from core.statusdir import (FINISHED_TTL_SECONDS, normalize_sessions,
+from core.statusdir import (DONE_CONFIRM_SECONDS, FINISHED_TTL_SECONDS,
+                            RUNNING_IDLE_TTL_SECONDS, normalize_sessions,
                             pick_primary)
 from ui.qt.lock_window import (STATE_COLORS, LockScreen, LockWindow,
                                SessionStack)
@@ -40,9 +42,12 @@ def check(name, cond, detail=""):
         failures.append(name)
 
 
-def session(sid, task, state="running", progress=None, lines=None, age=0):
-    return {"sid": sid, "task": task, "state": state, "progress": progress,
-            "lines": lines or [], "updated": time.time() - age}
+def session(sid, task, state="running", progress=None, lines=None, age=0,
+            **extra):
+    d = {"sid": sid, "task": task, "state": state, "progress": progress,
+         "lines": lines or [], "updated": time.time() - age}
+    d.update(extra)
+    return d
 
 
 def shown_titles(win):
@@ -97,36 +102,64 @@ check("5. 在跑的优先 + 组内按 updated 倒序",
       shown_titles(w) == ["C 运行中", "B 运行中", "A 已完成"],
       f"order={shown_titles(w)}")
 
-# ============================================================ 4. TTL 过期
+# ============================================================ 4. 撤卡规则
+# 2026-09-24：加了 running 的停更上限，并让 Stop 卡在 running 的会话在读取
+# 侧 settle 成 done —— 否则「✓ 本轮结束，等待确认…」的卡片会永远钉在屏幕上
 w.apply_status([
     session("old", "很久前完成", state="done", age=FINISHED_TTL_SECONDS + 100),
-    session("stuck", "卡住的在跑任务", state="running",
-            age=FINISHED_TTL_SECONDS * 12),
+    session("stuck", "停更很久的在跑任务", state="running",
+            age=FINISHED_TTL_SECONDS + 100),
+    session("alive", "在跑任务", state="running", age=30),
+    session("zombie", "跑飞的会话", state="running",
+            age=RUNNING_IDLE_TTL_SECONDS + 100),
+    session("stopped", "Stop 卡住的会话", state="running",
+            age=DONE_CONFIRM_SECONDS + 5,
+            turn_end_at=time.time() - (DONE_CONFIRM_SECONDS + 5),
+            lines=["你: 干活", "✓ 本轮结束，等待确认…"]),
     session("fresh", "刚完成", state="done", age=5),
 ])
 app.processEvents()
 titles = shown_titles(w)
 check("6. 过期收尾会话被过滤", "很久前完成" not in titles, f"titles={titles}")
-check("7. 在跑会话不受 TTL 限制", "卡住的在跑任务" in titles, f"titles={titles}")
+check("7. 在跑会话不按收尾 TTL 撤卡", "停更很久的在跑任务" in titles,
+      f"titles={titles}")
 check("8. 未过期收尾会话保留", "刚完成" in titles, f"titles={titles}")
+check("9. 停更超 30 分钟的在跑会话撤卡", "跑飞的会话" not in titles,
+      f"titles={titles}")
+check("10. 新鲜的在跑会话保留", "在跑任务" in titles, f"titles={titles}")
+stopped = [c for c in w.stack._cards
+           if not c.isHidden() and c._title_raw == "Stop 卡住的会话"]
+check("11. Stop 卡住的会话按「已完成」渲染",
+      bool(stopped) and stopped[0].state.text() == "已完成"
+      and stopped[0].lines.text().endswith("✓ 已完成"),
+      stopped[0].state.text() if stopped else "卡片未显示")
+
+w.apply_status([
+    session("alive2", "活着的任务", state="running", age=5),
+    session("dead2", "跑飞的会话", state="running",
+            age=RUNNING_IDLE_TTL_SECONDS + 100),
+])
+app.processEvents()
+check("11.1 状态栏不统计已撤卡的会话", w.sbTask.text() == "活着的任务",
+      w.sbTask.text())
 
 # ============================================================ 5. 状态栏
 w.apply_status([session("only", "唯一任务")])
 app.processEvents()
-check("9. 单会话 → 状态栏显示任务名", w.sbTask.text() == "唯一任务",
+check("12. 单会话 → 状态栏显示任务名", w.sbTask.text() == "唯一任务",
       w.sbTask.text())
-check("10. 单会话 → 状态栏圆点为 running 色",
+check("13. 单会话 → 状态栏圆点为 running 色",
       w.sbDot._color.name().lower() == STATE_COLORS["running"].lower(),
       w.sbDot._color.name())
 
 w.apply_status([session(f"m{i}", f"任务{i}") for i in range(3)])
 app.processEvents()
-check("11. 多会话 → 状态栏显示会话总数", "等 3 个会话" in w.sbTask.text(),
+check("14. 多会话 → 状态栏显示会话总数", "等 3 个会话" in w.sbTask.text(),
       w.sbTask.text())
 
 w.apply_status([])
 app.processEvents()
-check("12. 空快照 → 状态栏回落空闲", w.sbTask.text() == "空闲", w.sbTask.text())
+check("15. 空快照 → 状态栏回落空闲", w.sbTask.text() == "空闲", w.sbTask.text())
 
 # ============================================================ 6. 不遮挡
 w.apply_status([session(f"p{i}", f"任务{i}", progress=0.5,
@@ -134,31 +167,31 @@ w.apply_status([session(f"p{i}", f"任务{i}", progress=0.5,
 app.processEvents()
 cards = [c for c in w.stack._cards if not c.isHidden()]
 right_edges = [c.x() + c.width() for c in cards]
-check("13. 卡片不压住壁纸切换箭头",
+check("16. 卡片不压住壁纸切换箭头",
       max(right_edges) <= w.arrowR.x(),
       f"card_right={max(right_edges)} arrow_x={w.arrowR.x()}")
-check("14. 卡片不压住居中密码卡",
+check("17. 卡片不压住居中密码卡",
       min(c.x() for c in cards) >= w.card.x() + w.card.width(),
       f"card_x={min(c.x() for c in cards)} pw_right={w.card.x() + w.card.width()}")
-check("15. 卡片完整落在窗口内",
+check("18. 卡片完整落在窗口内",
       all(c.y() >= 0 and c.y() + c.height() <= w.height() for c in cards),
       f"ys={[(c.y(), c.height()) for c in cards]} h={w.height()}")
 
 # ============================================================ 7. 聚合辅助
-check("16. normalize_sessions(None) → []", normalize_sessions(None) == [])
-check("17. normalize_sessions(dict) → [dict]",
+check("19. normalize_sessions(None) → []", normalize_sessions(None) == [])
+check("20. normalize_sessions(dict) → [dict]",
       normalize_sessions({"sid": "x"}) == [{"sid": "x"}])
-check("18. normalize_sessions 过滤脏数据",
+check("21. normalize_sessions 过滤脏数据",
       normalize_sessions([{"sid": "ok"}, None, "", 3]) == [{"sid": "ok"}])
-check("19. pick_primary 优先最新在跑的",
+check("22. pick_primary 优先最新在跑的",
       pick_primary([session("d", "已完成", state="done", age=1),
                     session("r", "在跑的", state="running", age=30)]).get("sid")
       == "r")
-check("20. pick_primary 都不在跑时取最新收尾的",
+check("23. pick_primary 都不在跑时取最新收尾的",
       pick_primary([session("old", "旧", state="done", age=90),
                     session("new", "新", state="failed", age=2)]).get("sid")
       == "new")
-check("21. pick_primary(空) → None", pick_primary([]) is None
+check("24. pick_primary(空) → None", pick_primary([]) is None
       and pick_primary(None) is None)
 
 # ============================================================ 8. 多屏同步
@@ -168,7 +201,7 @@ ls.show(0)
 ls.update_status([session("w1", "会话一"), session("w2", "会话二",
                                                  state="done")])
 app.processEvents()
-check("22. 每个显示器窗口都同步了会话列表",
+check("25. 每个显示器窗口都同步了会话列表",
       len(ls.windows) > 0
       and all(len(shown_titles(win)) == 2 for win in ls.windows),
       f"windows={len(ls.windows)} titles={[shown_titles(x) for x in ls.windows]}")
@@ -179,7 +212,7 @@ w.resize(1024, 768)
 w.apply_status([session("n1", "窄屏任务一", progress=0.5, lines=["x"])])
 app.processEvents()
 cards = [c for c in w.stack._cards if not c.isHidden()]
-check("23. 窄屏下卡片收窄且不越界",
+check("26. 窄屏下卡片收窄且不越界",
       cards and cards[0].width() <= SessionCard.WIDTH and cards[0].x() >= 0,
       f"w={cards[0].width() if cards else -1} x={cards[0].x() if cards else -1}")
 

@@ -232,11 +232,19 @@ class Heartbeat:
 # ---------- 单实例锁 + 进程间「请求锁定」 ----------
 
 class LockRequest:
-    """第二个进程通过写一个时间戳文件，请求已在运行的实例执行锁定。"""
+    """第二个进程通过写一个时间戳文件，请求已在运行的实例执行锁定。
+
+    注意两个坑（2026-09-24 踩到）：
+      - `_last_seen` 必须初始化成「进程启动时刻」，不能是 0：否则上一次
+        运行残留的 lock_request（时间戳当然大于 0）会让每次启动都立刻锁屏。
+      - 读到的请求要删掉：残留文件会一直躺在 %APPDATA%\\AiLock\\ 里，
+        下次启动又会认成新请求。
+    """
 
     def __init__(self, path: Path | None = None):
+        import time
         self.path = Path(path) if path else app_dir() / "lock_request"
-        self._last_seen = 0.0
+        self._last_seen = time.time()   # 只认本次启动之后写下的请求
 
     def request(self) -> None:
         import time
@@ -246,11 +254,15 @@ class LockRequest:
             pass
 
     def consume(self) -> bool:
-        """返回 True 表示有新请求待处理。"""
+        """返回 True 表示有新请求待处理。读到即清除，避免残留误触发。"""
         try:
             ts = float(self.path.read_text(encoding="utf-8").strip() or 0)
         except Exception:
             return False
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
         if ts > self._last_seen:
             self._last_seen = ts
             return True

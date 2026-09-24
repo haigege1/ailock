@@ -24,8 +24,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsOpacityEffect,
                                QSizePolicy, QVBoxLayout, QWidget)
 
 from core.logger import log
-from core.statusdir import (FINISHED_TTL_SECONDS, normalize_sessions,
-                            pick_primary)
+from core.statusdir import live_sessions, normalize_sessions, pick_primary
 from . import theme as T
 from .wallpaper import WallpaperService, collect_wallpapers
 from .widgets import AvatarCircle, MarqueeLabel, StatusDot, ThinProgress
@@ -250,8 +249,13 @@ class SessionStack(QWidget):
 
     # ---------------------------------------------------------- 数据
     def apply(self, sessions) -> None:
-        """按「在跑的优先、其次最新」排序后渲染最多 MAX_CARDS 张卡。"""
-        items = normalize_sessions(sessions)
+        """按「在跑的优先、其次最新」排序后渲染最多 MAX_CARDS 张卡。
+
+        过期判定统一走 core.statusdir（收尾超 TTL / running 长时间无更新），
+        settle 兜底那些 Stop 卡在 running 的会话（后台确认进程被宿主杀掉的
+        场景）—— 两者都在 live_sessions 里，UI 只管排版。
+        """
+        items = live_sessions(sessions)
         now = time.time()
         ranked = []
         for d in items:
@@ -260,11 +264,6 @@ class SessionStack(QWidget):
                 updated = float(d.get("updated") or 0)
             except (TypeError, ValueError):
                 updated = 0.0
-            # 收尾超过 TTL 的会话不再占位（存储层同样会清理掉它的文件）
-            # waiting 是活跃态：等人授权不该过期消失
-            if (state not in ("running", "waiting")
-                    and now - updated > FINISHED_TTL_SECONDS):
-                continue
             # 等待授权排最前（需要人动手），其次在跑的，再按最新
             rank = 0 if state == "waiting" else 1 if state == "running" else 2
             ranked.append((rank, -updated, d))
@@ -810,8 +809,11 @@ class LockWindow(QWidget):
         （selftest / 手工推送），由 normalize_sessions 统一。
         会话卡全在右侧覆盖层里，这里不碰中央布局，因此不会出现卡片
         显隐导致的布局抖动。
+
+        先过滤出「还该展示」的会话（live_sessions），卡片和底部状态栏都用
+        这一份 —— 否则会出现卡片撤光了、状态栏还在说「等 N 个会话」。
         """
-        sessions = normalize_sessions(data)
+        sessions = live_sessions(data)
         if not sessions:
             self.stack.apply([])
             self.sbTask.setText("空闲")
